@@ -28,7 +28,12 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
     /* @inheritdoc} */
     public function send(msOrder $order) {
         $best2payLink = $this->getBest2PayLink($order);
+        // return $this->success('', array('redirect' =>  ''));
         return $this->success('', array('redirect' =>  $best2payLink));
+    }
+
+    public function getPaymentLink(msOrder $order) {
+        return $this->getBest2PayLink($order);
     }
 
     public function getBest2PayLink(msOrder $order) {
@@ -61,16 +66,23 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
         $fiscalPositions = '';
         $fiscalAmount = 0;
         $TAX = 6;
-        if (isset($order->items)) {
-            foreach ($order->items as $item) {
-                $fiscalPositions.=$item['quantity'].';';
+        
+        $arrfp = [];
+        $products = $order->getMany('Products'); 
+        foreach ($products as $product) {
+            $arrfp[] = ['name' => $product->get('name'), 'count' => $product->get('count'), 'price' => $product->get('price')];
+        }
+        
+        if ($arrfp) {
+            foreach ($arrfp as $item) {
+                $fiscalPositions.=$item['count'].';';
                 $elementPrice = $item['price'];
                 $elementPrice = $elementPrice * 100;
                 $fiscalPositions.=$elementPrice.';';
                 $fiscalPositions.=$TAX.';';
                 $fiscalPositions.=$item['name'].'|';
 
-                $fiscalAmount += $item['quantity'] * $elementPrice;
+                $fiscalAmount += $item['count'] * $elementPrice;
             }
             if ($order->shipping_method->price > 0) {
                 $fiscalPositions.='1;';
@@ -80,9 +92,11 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
 
                 $fiscalAmount += $order->shipping_method->price*100;
             }
-            $amountDiff = abs($fiscalAmount - $price*100);
-            if ($amountDiff) {
-                $fiscalPositions.='1;'.$amountDiff.';6;coupon;14'.'|';
+            $amountDiff = $amount - $fiscalAmount;
+            if ($amountDiff > 0) {
+                $fiscalPositions.='1;'.$amountDiff.';6;Доставка|';
+            } else if ($amountDiff < 0){
+                $fiscalPositions.='1;'.$amountDiff.';6;Скидка;14|';
             }
             $fiscalPositions = substr($fiscalPositions, 0, -1);
         }
@@ -111,7 +125,7 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
         $context  = stream_context_create($options);
         $best2pay_id = file_get_contents($url, false, $context);
         if (intval($best2pay_id) == 0) {
-            throw new Exception('error register order');
+            //throw new Exception('error register order');
         }
         $signature = base64_encode(md5($sector . $best2pay_id . $password));
         $link  = $best2pay_url
@@ -119,6 +133,8 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
             . '?sector=' .$sector
             . '&id=' . $best2pay_id
             . '&signature=' . $signature;
+            
+        // die('<pre>' . print_r([$data, $link], true));
         return $link;
     }
       /* @inheritdoc} */
