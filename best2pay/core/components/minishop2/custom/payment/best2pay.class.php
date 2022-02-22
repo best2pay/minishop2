@@ -57,7 +57,7 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
         } else if ($currencyName==='евро'){
             $currency=978;
         } else {
-            throw new Exception('Wrong currency');
+            throw new Exception($this->getOption('setting_ms2_payment_best2pay_wrong_currency'));
         }
         $password=$this->modx->getOption('setting_ms2_payment_best2pay_password');
         $desc=$this->modx->getOption('setting_ms2_payment_best2pay_desc', null, 'Оплата заказа').' '.$order->get('id');
@@ -66,13 +66,13 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
         $fiscalPositions = '';
         $fiscalAmount = 0;
         $TAX = 6;
-        
+
         $arrfp = [];
-        $products = $order->getMany('Products'); 
+        $products = $order->getMany('Products');
         foreach ($products as $product) {
             $arrfp[] = ['name' => $product->get('name'), 'count' => $product->get('count'), 'price' => $product->get('price')];
         }
-        
+
         if ($arrfp) {
             foreach ($arrfp as $item) {
                 $fiscalPositions.=$item['count'].';';
@@ -88,15 +88,15 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
                 $fiscalPositions.='1;';
                 $fiscalPositions.=($order->shipping_method->price*100).';';
                 $fiscalPositions.=$TAX.';';
-                $fiscalPositions.='Доставка'.'|';
+                $fiscalPositions.=$this->modx->getOption('setting_ms2_payment_best2pay_delivery', null, 'Доставка').'|';
 
                 $fiscalAmount += $order->shipping_method->price*100;
             }
             $amountDiff = $amount - $fiscalAmount;
             if ($amountDiff > 0) {
-                $fiscalPositions.='1;'.$amountDiff.';6;Доставка|';
+                $fiscalPositions.='1;'.$amountDiff.';6;'.$this->modx->getOption('setting_ms2_payment_best2pay_delivery', null, 'Доставка').'|';
             } else if ($amountDiff < 0){
-                $fiscalPositions.='1;'.$amountDiff.';6;Скидка;14|';
+                $fiscalPositions.='1;'.$amountDiff.';6;'.$this->modx->getOption('setting_ms2_payment_best2pay_sale', null, 'Скидка').';14|';
             }
             $fiscalPositions = substr($fiscalPositions, 0, -1);
         }
@@ -133,11 +133,11 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
             . '?sector=' .$sector
             . '&id=' . $best2pay_id
             . '&signature=' . $signature;
-            
+
         // die('<pre>' . print_r([$data, $link], true));
         return $link;
     }
-      /* @inheritdoc} */
+    /* @inheritdoc} */
     public function receive(msOrder $order, $params = array()) {
 
         /* @var miniShop2 $miniShop2 */
@@ -173,19 +173,19 @@ class Best2pay extends msPaymentHandler implements msPaymentInterface {
 
         $xml = file_get_contents($url, false, $context);
         if (!$xml)
-            throw new Exception("Empty data");
+            throw new Exception($this->modx->getOption('setting_ms2_payment_best2pay_empty_data'));
         $xml = simplexml_load_string($xml);
         if (!$xml)
-            throw new Exception("Non valid XML was received");
+            throw new Exception($this->modx->getOption('setting_ms2_payment_best2pay_nonvalid_xml'));
         $response = json_decode(json_encode($xml), true);
         if (!$response)
-            throw new Exception("Non valid XML was received");
+            throw new Exception($this->modx->getOption('setting_ms2_payment_best2pay_nonvalid_xml'));
 
         $tmp_response = (array)$response;
         unset($tmp_response["signature"]);
         $signature = base64_encode(md5(implode('', $tmp_response) . $password));
         if ($signature !== $response['signature'])
-            throw new Exception("Invalid signature");
+            throw new Exception($this->modx->getOption('setting_ms2_payment_best2pay_invalid_signature'));
 
         if ($response['type'] == 'PURCHASE' && $response['state'] == 'APPROVED'){
             @$this->modx->context->key = 'mgr';
